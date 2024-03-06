@@ -1,0 +1,100 @@
+---
+title: "ComEd Territory"
+author: "Matt Garvin"
+date: "2024-03-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(readxl)
+library(dplyr)
+library(knitr)
+library(httr)
+library(jsonlite)
+```
+
+## Import Excel data
+
+```{r}
+excel_data <- read_excel('C:\\Users\\mtthw\\Downloads\\ComEdTerritoryEIECStatus.xls')
+```
+
+## Glimpse data
+
+```{r}
+glimpse(excel_data)
+```
+# My API key
+```{r}
+api_key <- 'b8fbf52f12d103ba11eee58e5c41b1a396afc9b8'
+```
+
+# Construct the API request URL
+```{r}
+url <- paste0("https://api.census.gov/data/2020/dec/pl?get=P1_001N&for=state:*&key=", api_key)
+```
+
+# Make the API request
+```{r}
+response <- GET(url)
+```
+
+# Check if the request was successful
+```{r}
+# Check if the request was successful
+if (http_status(response)$category == "success") {
+  # Parse the JSON response
+  data <- content(response, "text")
+  census_data <- fromJSON(data)
+  
+  # Convert the JSON data to a data frame, skipping the first row if it contains headers
+  census_df <- as.data.frame(matrix(census_data[-1,], ncol = length(census_data[1,]), byrow = TRUE))
+  colnames(census_df) <- census_data[1,]
+  
+  print("Data loaded successfully.")
+} else {
+  print(paste("Failed to load data. Status code:", http_status(response)$reason))
+}
+```
+
+# Create list of zip codes
+```{r}
+zip_codes <- as.character(excel_data$`Zip Code`)
+```
+
+# Load JSON content from the Census API metadata URL
+```{r}
+census_metadata <- fromJSON("https://api.census.gov/data.json")
+```
+
+# Inspect the structure of census_metadata
+```{r}
+str(census_metadata, max.level = 1)
+```
+# Filter datasets containing "Housing" in their title
+```{r}
+housing_datasets <- census_metadata$dataset %>%
+  filter(grepl("Housing", title, ignore.case = TRUE))
+```
+
+# Examine first few rows of housing_datasets
+```{r}
+head(housing_datasets)
+```
+
+
+# Filter for datasets containing "Housing" in their title
+```{r}
+housing_datasets <- Filter(function(dataset) grepl("Housing", dataset$title, ignore.case = TRUE), census_metadata$dataset)
+```
+
