@@ -27,6 +27,8 @@ library(jsonlite)
 
 ```{r}
 excel_data <- read_excel('C:\\Users\\mtthw\\Downloads\\ComEdTerritoryEIECStatus.xls')
+med_inc_data <-read.csv("C:\\Users\\mtthw\\Downloads\\ACSST5Y2022.S1901_2024-03-06T142524\\ACSST5Y2022.S1901-Data.csv")
+housing_data <-read.csv("C:\\Users\\mtthw\\Desktop\\housing-Data.csv")
 ```
 
 ## Glimpse data
@@ -41,12 +43,15 @@ api_key <- 'b8fbf52f12d103ba11eee58e5c41b1a396afc9b8'
 
 # Construct the API request URL
 ```{r}
-url <- paste0("https://api.census.gov/data/2020/dec/pl?get=P1_001N&for=state:*&key=", api_key)
+url <- paste0("https://api.census.gov/data/2022/acs/acsse?get=NAME,K201902_001E&for=state:17&key=", api_key)
 ```
 
 # Make the API request
 ```{r}
 response <- GET(url)
+content <- content(response, "text", encoding = "UTF-8")
+data <- fromJSON(content)
+data_df <- as.data.frame(data)
 ```
 
 # Check if the request was successful
@@ -70,31 +75,85 @@ if (http_status(response)$category == "success") {
 # Create list of zip codes
 ```{r}
 zip_codes <- as.character(excel_data$`Zip Code`)
+zip_codes_modified <- paste0("ZCTA5 ", zip_codes)
 ```
 
 # Load JSON content from the Census API metadata URL
 ```{r}
-census_metadata <- fromJSON("https://api.census.gov/data.json")
+census_metadata <- fromJSON("https://api.census.gov/data/2022/acs/acsse/variables.json")
 ```
 
 # Inspect the structure of census_metadata
 ```{r}
 str(census_metadata, max.level = 1)
 ```
-# Filter datasets containing "Housing" in their title
+
 ```{r}
-housing_datasets <- census_metadata$dataset %>%
-  filter(grepl("Housing", title, ignore.case = TRUE))
+# Extract this row before filtering
+important_info_row <- med_inc_data[1, ]
+
+# Perform the filtering as before
+filtered_med_inc_data <- med_inc_data[med_inc_data$NAME %in% zip_codes_modified, ]
+
+# Add the important_info_row back to the top of your filtered data
+# Note: Make sure important_info_row and filtered_med_inc_data have the same columns
+filtered_med_inc_data <- rbind(important_info_row, filtered_med_inc_data)
+
+# View the result
+print(filtered_med_inc_data)
+
+write.csv(filtered_med_inc_data, "/path/to/your/directory/filtered_med_inc_data.csv", row.names = FALSE)
+```
+# Troubleshooting
+```{r}
+names(med_inc_data)
+
+```
+```{r}
+# Remove "ZCTA5 " from the NAME column in filtered_med_inc_data
+filtered_med_inc_data$NAME <- gsub("ZCTA5 ", "", filtered_med_inc_data$NAME)
+
+# Check the first few entries to confirm the change
+head(filtered_med_inc_data$NAME)
+
 ```
 
-# Examine first few rows of housing_datasets
 ```{r}
-head(housing_datasets)
+# Ensure the Zip Code column in excel_data is character type for accurate matching
+excel_data$`Zip Code` <- as.character(excel_data$`Zip Code`)
+
+# Rename the NAME column in filtered_med_inc_data to match the naming convention in excel_data for clarity
+filtered_med_inc_data$ZipCode <- filtered_med_inc_data$NAME
+
+# Select only the relevant columns (ZipCode and the two columns of interest) from filtered_med_inc_data
+filtered_subset <- filtered_med_inc_data[, c("ZipCode", "S1901_C01_001E", "S1901_C01_012E")]
+
+# Merge the datasets based on ZipCode
+merged_data <- merge(excel_data, filtered_subset, by.x = "Zip Code", by.y = "ZipCode", all.x = TRUE)
+
+# View the first few rows to confirm the merge
+head(merged_data)
+
+write.csv(merged_data, "merged_data.csv", row.names = FALSE)
+
 ```
 
-
-# Filter for datasets containing "Housing" in their title
 ```{r}
-housing_datasets <- Filter(function(dataset) grepl("Housing", dataset$title, ignore.case = TRUE), census_metadata$dataset)
+# Extract this row before filtering
+important_info_row <- housing_data[1, ]
+
+# Perform the filtering as before
+filtered_housing_data <- housing_data[housing_data$NAME %in% zip_codes_modified, ]
+
+# Add the important_info_row back to the top of your filtered data
+# Note: Make sure important_info_row and filtered_med_inc_data have the same columns
+filtered_housing_data <- rbind(important_info_row, filtered_housing_data)
+
+# Remove "ZCTA5 " from the NAME column in filtered_housing_data
+filtered_housing_data$NAME <- gsub("ZCTA5 ", "", filtered_housing_data$NAME)
+```
+
+```{r}
+write.csv(filtered_housing_data, "filtered_housing_data.csv", row.names = FALSE)
 ```
 
